@@ -3,87 +3,117 @@ import sys
 import glob
 import time
 import datetime
+import sqlite3
 
-def get_artistid_simArtists(trackfile):
+verbose = True
+
+def encode_string(s):
+    """
+    Simple utility function to make sure a string is proper
+    to be used in a SQLite query
+    (different than posgtresql, no N to specify unicode)
+    EXAMPLE:
+      That's my boy! -> 'That''s my boy!'
+    """
+    return "'" + s.replace("'", "''") + "'"
+
+def create_database(filename):
+	# creates file
+    conn = sqlite3.connect(filename)
+    # create artist table
+    c = conn.cursor()
+    q = 'CREATE TABLE artists (artist_id text primary key, artist_name text)'
+    if verbose: print q
+    c.execute(q)
+
+    q = 'CREATE TABLE sim_artists (start_artist_id text, end_artist_id text, primary key(start_artist_id, end_artist_id))'
+    if verbose: print q
+    c.execute(q)
+
+    q = 'CREATE TABLE tracks (track_id text primary key, artist_id text, track_year integer, track_name text)'
+    if verbose: print q
+    c.execute(q)
+    # commit and close
+    conn.commit()
+    c.close()
+    conn.close()
+
+def save_artist(artist_id, artist_name, conn):
+	c = conn.cursor()
+	q = 'INSERT INTO artists VALUES (' + encode_string(artist_id) + ", " + encode_string(artist_name) + ")"
+	if verbose: print q
+	c.execute(q)
+	c.close()
+
+def update_sim_artists(artist_id, sim_artist_list, conn):
+	c = conn.cursor()
+	q = 'SELECT end_artist_id FROM sim_artists WHERE start_artist_id = ' + encode_string(artist_id)
+	if verbose: print q
+	res = c.execute(q)
+	existing_sim_artists = res.fetchall()
+	existing_sim_artists = set([artist[0] for artist in existing_sim_artists])
+
+	artists_to_add = set()
+	for sim_artist in sim_artist_list:
+		if sim_artist not in existing_sim_artists:
+			artists_to_add.add(sim_artist)
+
+	if not artists_to_add:
+		return
+
+	q = 'INSERT INTO sim_artists VALUES '
+	for artist in artists_to_add:
+		q += '(' + encode_string(artist_id) + ', ' + encode_string(artist) + '), '
+	q = q[:-2]
+	if verbose: print q
+	c.execute(q)
+	c.close()
+
+def save_track(track_id, artist_id, track_year, track_name, conn):
+	c = conn.cursor()
+	q = 'INSERT INTO tracks VALUES (' + encode_string(track_id) + ', ' + encode_string(artist_id) + ', ' + str(track_year) + ', ' + encode_string(track_name) + ')'
+	if verbose: print q
+	c.execute(q)
+	c.close()
+
+def process_file(trackfile, conn, artists):
     h5 = hdf5_utils.open_h5_file_read(trackfile)
     assert GETTERS.get_num_songs(h5) == 1,'code must be modified if more than one song per .h5 file'
-    aid = GETTERS.get_artist_id(h5)
-    sim_artists = GETTERS.get_similar_artists(h5)
-    aname = GETTERS.get_artist_name(h5)
+
+    artist_id = GETTERS.get_artist_id(h5)
+    artist_name = GETTERS.get_artist_name(h5)
+    if artist_id not in artists:
+    	save_artist(artist_id, artist_name, conn)
+    	artists.add(artist_id)
+
+    sim_artist_list = GETTERS.get_similar_artists(h5)
+    update_sim_artists(artist_id, sim_artist_list, conn)
+
+    track_id = GETTERS.get_track_id(h5)
+    track_year = GETTERS.get_year(h5)
+    track_name = GETTERS.get_title(h5)
+    save_track(track_id, artist_id, track_year, track_name, conn)
+
     h5.close()
-    return aid, sim_artists, aname
 
-
-def get_artistid_trackid_artistname(trackfile):
-    """
-    Utility function, opens a h5 file, gets the 4 following fields:
-     - artist Echo Nest ID
-     - artist Musicbrainz ID
-     - track Echo Nest ID
-     - artist name
-    It is returns as a triple (,,)
-    Assumes one song per file only!
-    """
-    h5 = hdf5_utils.open_h5_file_read(trackfile)
-    assert GETTERS.get_num_songs(h5) == 1,'code must be modified if more than one song per .h5 file'
-    aid = GETTERS.get_artist_id(h5)
-    ambid = GETTERS.get_artist_mbid(h5)
-    tid = GETTERS.get_track_id(h5)
-    aname = GETTERS.get_artist_name(h5)
-    h5.close()
-    return aid,ambid,tid,aname
-
-def list_all(maindir):
-    """
-    Goes through all subdirectories, open every song file,
-    and list all artists it finds.
-    It returns a dictionary of string -> tuples:
-       artistID -> (musicbrainz ID, trackID, artist_name)
-    The track ID is random, i.e. the first one we find for that
-    artist. The artist information should be the same in all track
-    files from that artist.
-    We assume one song per file, if not, must be modified to take
-    into account the number of songs in each file.
-    INPUT
-      maindir  - top directory of the dataset, we will parse all
-                 subdirectories for .h5 files
-    RETURN
-      dictionary that maps artist ID to tuple (MBID, track ID, artist name)
-    """
-    numRepeats = 0
-    numRepeatsWithDiffs = 0
-
-    results = {}
+def process_all(maindir, conn):
+    artists = set()
     numfiles = 0
     # iterate over all files in all subdirectories
     for root, dirs, files in os.walk(maindir):
         # keep the .h5 files
         files = glob.glob(os.path.join(root,'*.h5'))
         for f in files :
-            if numfiles % 100 == 0: print numfiles, f
+            if numfiles % 100 == 0:
+            	print numfiles, f
+            	conn.commit()
+
             numfiles +=1
-            # get the info we want
-            # aid,ambid,tid,aname = get_artistid_trackid_artistname(f)
-            aid, sim_artists, aname = get_artistid_simArtists(f)
-            assert aid != '','null artist id in track file: '+f
 
-            # check if we know that artist
-            if aid in results.keys():
-                numRepeats += 1
-                old_sim_artists = results[aid][0]
-
-                for sim_artist in sim_artists:
-                    if not sim_artist in old_sim_artists:
-                        print 'found a disagreeing list of similar artists'
-                        numRepeatsWithDiffs += 1
-                        break
-                continue
-            # we add to the results dictionary
-            results[aid] = (sim_artists, aname)
-    # done
-    print 'repeats:', numRepeats
-    print 'repeats with diffs:', numRepeatsWithDiffs
-    return results
+            process_file(f, conn, artists)
+    conn.commit()
+    print 'num files:', numfiles
+    print 'num artists:', len(artists)
 
 
 def die_with_usage():
@@ -107,8 +137,8 @@ def die_with_usage():
 if __name__ == '__main__':
 
     # help menu
-    # if len(sys.argv) < 3:
-    #     die_with_usage()
+    if len(sys.argv) < 3:
+        die_with_usage()
 
     # Million Song Dataset imports, works under Linux
     # otherwise, put the PythonSrc directory in the PYTHONPATH!
@@ -122,41 +152,42 @@ if __name__ == '__main__':
 
     # params
     maindir = sys.argv[1]
-    print os.path.abspath(maindir)
-
-    # os.chdir('C:')
-
-
-    output = sys.argv[2]
+    dbfile = sys.argv[2]
 
     # sanity checks
     if not os.path.isdir(maindir):
         print maindir,'is not a directory'
         sys.exit(0)
-    # if os.path.isfile(output):
-    #     print 'output file:',output,'exists, please delete or choose new one'
+    # if os.path.isfile(dbfile):
+    #     print 'output file:',dbfile,'exists, please delete or choose new one'
     #     sys.exit(0)
 
     # go!
     t1 = time.time()
-    dArtists = list_all(maindir)
+    create_database(dbfile)
+
+    conn = sqlite3.connect(dbfile)
+
+    process_all(maindir, conn)
+    conn.close()
+
     t2 = time.time()
     stimelength = str(datetime.timedelta(seconds=t2-t1))
-    print 'number of artists found:', len(dArtists),'in',stimelength
+    print 'time:',stimelength
 
 
-    # print to file
-    artistids = dArtists.keys()
-    try:
-        import numpy
-        artistids = numpy.sort(artistids)
-    except ImportError:
-        print 'artists IDs will not be sorted alphabetically (numpy not installed)'
-    f = open(output,'w')
-    for aid in artistids:
-        sim_artists, aname = dArtists[aid]
-        f.write(aid+'<SEP>'+str(sim_artists)+'<SEP>'+aname+'\n')
-    f.close()
+    # # print to file
+    # artistids = dArtists.keys()
+    # try:
+    #     import numpy
+    #     artistids = numpy.sort(artistids)
+    # except ImportError:
+    #     print 'artists IDs will not be sorted alphabetically (numpy not installed)'
+    # f = open(output,'w')
+    # for aid in artistids:
+    #     sim_artists, aname = dArtists[aid]
+    #     f.write(aid+'<SEP>'+str(sim_artists)+'<SEP>'+aname+'\n')
+    # f.close()
 
     # FUN STATS! (require numpy)
     # try:
