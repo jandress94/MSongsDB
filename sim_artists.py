@@ -5,7 +5,7 @@ import time
 import datetime
 import sqlite3
 
-verbose = True
+verbose = False
 
 def encode_string(s):
     """
@@ -13,12 +13,12 @@ def encode_string(s):
     to be used in a SQLite query
     (different than posgtresql, no N to specify unicode)
     EXAMPLE:
-      That's my boy! -> 'That''s my boy!'
+    That's my boy! -> 'That''s my boy!'
     """
     return "'" + s.replace("'", "''") + "'"
 
 def create_database(filename):
-	# creates file
+    # creates file
     conn = sqlite3.connect(filename)
     # create artist table
     c = conn.cursor()
@@ -33,58 +33,86 @@ def create_database(filename):
     q = 'CREATE TABLE tracks (track_id text primary key, artist_id text, track_year integer, track_name text)'
     if verbose: print q
     c.execute(q)
+
+    q = 'CREATE TABLE terms (artist_id text, term text, term_freq real, term_weight real, primary key(artist_id, term))'
+    if verbose: print q
+    c.execute(q)
     # commit and close
     conn.commit()
     c.close()
     conn.close()
 
+def update_terms(artist_id, term_list, freq_list, weight_list, conn):
+    c = conn.cursor()
+    q = 'SELECT term FROM terms WHERE artist_id = ' + encode_string(artist_id)
+    if verbose: print q
+    res = c.execute(q)
+    existing_terms = res.fetchall()
+    existing_terms = set([existing_term[0] for existing_term in existing_terms])
+
+    terms_to_add = set()
+    for i in xrange(len(term_list)):
+        if term_list[i] not in existing_terms:
+            terms_to_add.add(i)
+
+    if not terms_to_add:
+        return
+
+    q = 'INSERT INTO terms VALUES (?, ?, ?, ?)'
+    for idx in terms_to_add:
+        if verbose: print q, artist_id, term_list[idx], freq_list[idx], weight_list[idx]
+        c.execute(q, (artist_id, term_list[idx], freq_list[idx], weight_list[idx]))
+    c.close()
+
 def save_artist(artist_id, artist_name, conn):
-	c = conn.cursor()
-	q = 'INSERT INTO artists VALUES (' + encode_string(artist_id) + ", " + encode_string(artist_name) + ")"
-	if verbose: print q
-	c.execute(q)
-	c.close()
+    c = conn.cursor()
+    q = 'INSERT INTO artists VALUES (' + encode_string(artist_id) + ", " + encode_string(artist_name) + ")"
+    if verbose: print q
+    c.execute(q)
+    c.close()
 
 def update_sim_artists(artist_id, sim_artist_list, conn):
-	c = conn.cursor()
-	q = 'SELECT end_artist_id FROM sim_artists WHERE start_artist_id = ' + encode_string(artist_id)
-	if verbose: print q
-	res = c.execute(q)
-	existing_sim_artists = res.fetchall()
-	existing_sim_artists = set([artist[0] for artist in existing_sim_artists])
+    c = conn.cursor()
+    q = 'SELECT end_artist_id FROM sim_artists WHERE start_artist_id = ' + encode_string(artist_id)
+    if verbose: print q
+    res = c.execute(q)
+    existing_sim_artists = res.fetchall()
+    existing_sim_artists = set([artist[0] for artist in existing_sim_artists])
 
-	artists_to_add = set()
-	for sim_artist in sim_artist_list:
-		if sim_artist not in existing_sim_artists:
-			artists_to_add.add(sim_artist)
+    artists_to_add = set()
+    for sim_artist in sim_artist_list:
+        if sim_artist not in existing_sim_artists:
+            artists_to_add.add(sim_artist)
 
-	if not artists_to_add:
-		return
+    if not artists_to_add:
+        return
 
-	q = 'INSERT INTO sim_artists VALUES '
-	for artist in artists_to_add:
-		q += '(' + encode_string(artist_id) + ', ' + encode_string(artist) + '), '
-	q = q[:-2]
-	if verbose: print q
-	c.execute(q)
-	c.close()
+    q = 'INSERT INTO sim_artists VALUES (?, ?)'
+    for artist in artists_to_add:
+        if verbose: print q, artist_id, artist
+        c.execute(q, (artist_id, artist))
+    c.close()
 
 def save_track(track_id, artist_id, track_year, track_name, conn):
-	c = conn.cursor()
-	q = 'INSERT INTO tracks VALUES (' + encode_string(track_id) + ', ' + encode_string(artist_id) + ', ' + str(track_year) + ', ' + encode_string(track_name) + ')'
-	if verbose: print q
-	c.execute(q)
-	c.close()
+    c = conn.cursor()
+    q = 'INSERT INTO tracks VALUES (' + encode_string(track_id) + ', ' + encode_string(artist_id) + ', ' + str(track_year) + ', ' + encode_string(track_name) + ')'
+    if verbose: print q
+    c.execute(q)
+    c.close()
 
 def process_file(trackfile, conn, artists):
     h5 = hdf5_utils.open_h5_file_read(trackfile)
-    assert GETTERS.get_num_songs(h5) == 1,'code must be modified if more than one song per .h5 file'
+
+    if GETTERS.get_num_songs(h5) != 1:
+        print 'there was a file that had more than one song:', trackfile
+        return
+    # assert GETTERS.get_num_songs(h5) == 1,'code must be modified if more than one song per .h5 file'
 
     artist_id = GETTERS.get_artist_id(h5)
     artist_name = GETTERS.get_artist_name(h5)
     if artist_id not in artists:
-    	save_artist(artist_id, artist_name, conn)
-    	artists.add(artist_id)
+        save_artist(artist_id, artist_name, conn)
+        artists.add(artist_id)
 
     sim_artist_list = GETTERS.get_similar_artists(h5)
     update_sim_artists(artist_id, sim_artist_list, conn)
@@ -93,6 +121,11 @@ def process_file(trackfile, conn, artists):
     track_year = GETTERS.get_year(h5)
     track_name = GETTERS.get_title(h5)
     save_track(track_id, artist_id, track_year, track_name, conn)
+
+    term_list = GETTERS.get_artist_terms(h5)
+    freq_list = GETTERS.get_artist_terms_freq(h5)
+    weight_list = GETTERS.get_artist_terms_weight(h5)
+    update_terms(artist_id, term_list, freq_list, weight_list, conn)
 
     h5.close()
 
@@ -104,13 +137,12 @@ def process_all(maindir, conn):
         # keep the .h5 files
         files = glob.glob(os.path.join(root,'*.h5'))
         for f in files :
-            if numfiles % 100 == 0:
-            	print numfiles, f
-            	conn.commit()
-
-            numfiles +=1
-
+            if numfiles % 500 == 0:
+                print numfiles, f
+                conn.commit()
+            numfiles += 1
             process_file(f, conn, artists)
+
     conn.commit()
     print 'num files:', numfiles
     print 'num artists:', len(artists)
@@ -158,9 +190,9 @@ if __name__ == '__main__':
     if not os.path.isdir(maindir):
         print maindir,'is not a directory'
         sys.exit(0)
-    # if os.path.isfile(dbfile):
-    #     print 'output file:',dbfile,'exists, please delete or choose new one'
-    #     sys.exit(0)
+    if os.path.isfile(dbfile):
+        print 'output file:',dbfile,'exists, please delete or choose new one'
+        sys.exit(0)
 
     # go!
     t1 = time.time()
@@ -174,56 +206,3 @@ if __name__ == '__main__':
     t2 = time.time()
     stimelength = str(datetime.timedelta(seconds=t2-t1))
     print 'time:',stimelength
-
-
-    # # print to file
-    # artistids = dArtists.keys()
-    # try:
-    #     import numpy
-    #     artistids = numpy.sort(artistids)
-    # except ImportError:
-    #     print 'artists IDs will not be sorted alphabetically (numpy not installed)'
-    # f = open(output,'w')
-    # for aid in artistids:
-    #     sim_artists, aname = dArtists[aid]
-    #     f.write(aid+'<SEP>'+str(sim_artists)+'<SEP>'+aname+'\n')
-    # f.close()
-
-    # FUN STATS! (require numpy)
-    # try:
-    #     import numpy as np
-    # except ImportError:
-    #     print 'no numpy, no fun stats!'
-    #     sys.exit(0)
-    # import re
-    # print 'FUN STATS!'
-    # # name length
-    # name_lengths = map(lambda x: len(dArtists[x][2]), artistids)
-    # print 'average artist name length:',np.mean(name_lengths),'(std =',str(np.std(name_lengths))+')'
-    # # most common word
-    # dWords = {}
-    # for ambid,tid,aname in dArtists.values():
-    #     words = re.findall(r'\w+', aname.lower())
-    #     for w in words:
-    #         if w in dWords.keys():
-    #             dWords[w] += 1
-    #         else:
-    #             dWords[w] = 1
-    # words = dWords.keys()
-    # wfreqs = map(lambda x: dWords[x], words)
-    # pos = np.argsort(wfreqs)
-    # pos = pos[-1::-1]
-    # print 'number of different words used:',len(words)
-    # print 'the most used words in artist names are:'
-    # for p in pos[:5]:
-    #     print '*',words[p],'(freq='+str(wfreqs[p])+')'
-    # print 'some artists using the 30th most frequent word ('+words[pos[30]]+'):'
-    # frequentword = words[pos[30]]
-    # cnt = 0
-    # for ambid,tid,aname in dArtists.values():
-    #     words = re.findall(r'\w+', aname.lower())
-    #     if frequentword in words:
-    #         print '*',aname
-    #         cnt += 1
-    #     if cnt >= min(5,wfreqs[pos[10]]):
-    #         break
