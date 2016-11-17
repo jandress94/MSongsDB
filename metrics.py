@@ -36,3 +36,12 @@ def get_human_term_metric(communities, nid_to_aid_map, conn):
                 diff_comm_sim += term_sim
                 num_diff_comm_pairs += len(communities[commId1]) * len(communities[commId2])
     return same_comm_sim / num_same_comm_pairs, diff_comm_sim / num_diff_comm_pairs
+
+# computes the modularity of a provided community partitioning
+# expects the first input to be of type snap.TCnComV
+# returns the total modularity of the network
+def get_modularity_metric(graph, communities):
+    total_modularity = 0
+    for community in communities:
+        total_modularity += snap.GetModularity(graph, community.NIdV)
+    return total_modularity
