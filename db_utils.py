@@ -12,7 +12,7 @@ def create_indices(conn):
     c.execute(q)
     q = 'CREATE INDEX IF NOT EXISTS your_sim_index ON sim_artists (end_artist_id)'
     c.execute(q)
-    q = 'CREATE INDEX IF NOT EXISTS my_track_index ON tracks (artist_id)'
+    q = 'DROP INDEX IF EXISTS my_track_index'
     c.execute(q)
     c.close()
     conn.commit()
@@ -47,9 +47,11 @@ def get_artist_name(artist_id, conn):
     return artist_name[0][0]
 
 # returns list of tuples (term, term_freq, term_weight)
-def get_artist_terms(artist_id, conn):
+def get_artist_terms(artist_id, conn, limit = None):
     c = conn.cursor()
     q = 'SELECT term, term_freq, term_weight FROM terms WHERE artist_id = ' + encode_string(artist_id)
+    if limit is not None:
+        q += ' LIMIT ' + str(limit)
     return get_query_results_and_close(q, c)
 
 # returns a list of artists similar to the provided artist_id

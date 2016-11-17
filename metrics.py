@@ -3,11 +3,15 @@ from db_utils import get_artist_terms
 
 def get_communities_term_sim(comm1, comm2, nid_to_terms_map):
     term_sim = 0
+    pair_count = 0
     for nid1 in comm1:
+        if not nid_to_terms_map[nid1]: continue
         for nid2 in comm2:
+            if not nid_to_terms_map[nid2]: continue
             if nid1 == nid2: continue
             term_sim += 1.0 * len(nid_to_terms_map[nid1] & nid_to_terms_map[nid2]) / len(nid_to_terms_map[nid1] | nid_to_terms_map[nid2])
-    return term_sim
+            pair_count += 1
+    return term_sim, pair_count
 
 # computes the human tag metric score for a provided community partitioning
 # expects the first input to be of type snap.TCnComV
@@ -28,13 +32,13 @@ def get_human_term_metric(communities, nid_to_aid_map, conn):
 
     for commId1 in range(len(communities)):
         for commId2 in range(commId1 + 1):
-            term_sim = get_communities_term_sim(communities[commId1].NIdV, communities[commId2].NIdV, nid_to_terms_map)
+            term_sim, pair_count = get_communities_term_sim(communities[commId1].NIdV, communities[commId2].NIdV, nid_to_terms_map)
             if commId1 == commId2:
                 same_comm_sim += term_sim / 2
-                num_same_comm_pairs += len(communities[commId1]) * (len(communities[commId1]) - 1) / 2
+                num_same_comm_pairs += pair_count
             else:
                 diff_comm_sim += term_sim
-                num_diff_comm_pairs += len(communities[commId1]) * len(communities[commId2])
+                num_diff_comm_pairs += pair_count
     return same_comm_sim / num_same_comm_pairs, diff_comm_sim / num_diff_comm_pairs
 
 # computes the modularity of a provided community partitioning
