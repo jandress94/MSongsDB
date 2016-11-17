@@ -1,16 +1,22 @@
 import sqlite3
 
 def open_db_conn(filename):
-    return sqlite3.connect(filename)
+    conn = sqlite3.connect(filename)
+    create_indices(conn)
+    return conn
 
-def create_sim_artist_indices(conn):
+def create_indices(conn):
+    print 'creating indices'
     c = conn.cursor()
     q = 'CREATE INDEX IF NOT EXISTS my_sim_index ON sim_artists (start_artist_id)'
     c.execute(q)
     q = 'CREATE INDEX IF NOT EXISTS your_sim_index ON sim_artists (end_artist_id)'
     c.execute(q)
+    q = 'CREATE INDEX IF NOT EXISTS my_track_index ON tracks (artist_id)'
+    c.execute(q)
     c.close()
     conn.commit()
+    print 'done creating indices'
 
 def close_db_conn(conn):
     conn.close()
@@ -41,7 +47,7 @@ def get_artist_name(artist_id, conn):
     return artist_name[0][0]
 
 # returns list of tuples (term, term_freq, term_weight)
-def get_artist_tags(artist_id, conn):
+def get_artist_terms(artist_id, conn):
     c = conn.cursor()
     q = 'SELECT term, term_freq, term_weight FROM terms WHERE artist_id = ' + encode_string(artist_id)
     return get_query_results_and_close(q, c)
