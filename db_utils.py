@@ -3,6 +3,15 @@ import sqlite3
 def open_db_conn(filename):
     return sqlite3.connect(filename)
 
+def create_sim_artist_indices(conn):
+    c = conn.cursor()
+    q = 'CREATE INDEX IF NOT EXISTS my_sim_index ON sim_artists (start_artist_id)'
+    c.execute(q)
+    q = 'CREATE INDEX IF NOT EXISTS your_sim_index ON sim_artists (end_artist_id)'
+    c.execute(q)
+    c.close()
+    conn.commit()
+
 def close_db_conn(conn):
     conn.close()
 
