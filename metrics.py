@@ -70,6 +70,7 @@ def get_temporal_smoothness_metric(comms_t1, comms_t2):
         if nid1 not in nid_to_comm_map_t2: continue
         for nid2 in nid_to_comm_map_t1:
             if nid2 not in nid_to_comm_map_t2: continue
+            if nid1 == nid2: continue
 
             if (nid_to_comm_map_t1[nid1] == nid_to_comm_map_t1[nid2]) == (nid_to_comm_map_t2[nid1] == nid_to_comm_map_t2[nid2]):
                 same_state_pairs += 1
