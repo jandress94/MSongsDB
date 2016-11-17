@@ -34,7 +34,7 @@ def get_human_term_metric(communities, nid_to_aid_map, conn):
         for commId2 in range(commId1 + 1):
             term_sim, pair_count = get_communities_term_sim(communities[commId1].NIdV, communities[commId2].NIdV, nid_to_terms_map)
             if commId1 == commId2:
-                same_comm_sim += term_sim / 2
+                same_comm_sim += term_sim
                 num_same_comm_pairs += pair_count
             else:
                 diff_comm_sim += term_sim
@@ -49,3 +49,32 @@ def get_modularity_metric(graph, communities):
     for community in communities:
         total_modularity += snap.GetModularity(graph, community.NIdV)
     return total_modularity
+
+# computes the temporal smoothness counts across two years' community partitions
+# expects the two inputs to be of type snap.TCnComV
+# returns "number of pairs in the same state in t1 and t2", "number of pairs in different states in t1 and t2"
+def get_temporal_smoothness_metric(comms_t1, comms_t2):
+    # get the mapping from nid to community id in times t1 and t2
+    nid_to_comm_map_t1 = {}
+    for comm_t1_idx in range(len(comms_t1)):
+        for n_t1 in comms_t1[comm_t1_idx]:
+            nid_to_comm_map_t1[n_t1] = comm_t1_idx
+    nid_to_comm_map_t2 = {}
+    for comm_t2_idx in range(len(comms_t2)):
+        for n_t2 in comms_t2[comm_t2_idx]:
+            nid_to_comm_map_t2[n_t2] = comm_t2_idx
+
+    same_state_pairs = 0
+    diff_state_pairs = 0
+    for nid1 in nid_to_comm_map_t1:
+        if nid1 not in nid_to_comm_map_t2: continue
+        for nid2 in nid_to_comm_map_t1:
+            if nid2 not in nid_to_comm_map_t2: continue
+
+            if (nid_to_comm_map_t1[nid1] == nid_to_comm_map_t1[nid2]) == (nid_to_comm_map_t2[nid1] == nid_to_comm_map_t2[nid2]):
+                same_state_pairs += 1
+            else:
+                diff_state_pairs += 1
+    return same_state_pairs, diff_state_pairs
+
+

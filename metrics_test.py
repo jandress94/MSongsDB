@@ -23,7 +23,10 @@ nodes_and_edges = []
 snap_modularity_list = []
 my_modularity_list = []
 term_metric_list = []
+temp_smoothness_list = []
 num_clusters = []
+
+CmtyV_t_minus_1 = None
 
 for year in range(1930, 1961):
     print year
@@ -44,6 +47,11 @@ for year in range(1930, 1961):
     print '  computing term similarity'
     term_metric_list.append(get_human_term_metric(CmtyV, nid_to_aid_map, conn))
 
+    if CmtyV_t_minus_1 is not None:
+        print '  computing temporal smoothness'
+        temp_smoothness_list.append(get_temporal_smoothness_metric(CmtyV_t_minus_1, CmtyV))
+    CmtyV_t_minus_1 = CmtyV
+
     num_clusters.append(CmtyV.Len())
 
 np.savetxt('years.txt', years, delimiter=',')
@@ -51,6 +59,7 @@ np.savetxt('nodes_and_edges.txt', nodes_and_edges, delimiter=',')
 np.savetxt('snap_modularity_list.txt', snap_modularity_list, delimiter=',')
 np.savetxt('my_modularity_list.txt', my_modularity_list, delimiter=',')
 np.savetxt('term_metric_list.txt', term_metric_list, delimiter=',')
+np.savetxt('temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
 np.savetxt('num_clusters.txt', num_clusters, delimiter=',')
 
 close_db_conn(conn)
