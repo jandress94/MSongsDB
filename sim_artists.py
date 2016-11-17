@@ -19,24 +19,26 @@ def encode_string(s):
 
 def create_database(filename):
     # creates file
+    print filename
     conn = sqlite3.connect(filename)
     # create artist table
     c = conn.cursor()
-    q = 'CREATE TABLE artists (artist_id text primary key, artist_name text)'
+    q = 'CREATE TABLE artists (artist_id text primary key, artist_name text)'# WITHOUT ROWID'
     if verbose: print q
     c.execute(q)
 
-    q = 'CREATE TABLE sim_artists (start_artist_id text, end_artist_id text, primary key(start_artist_id, end_artist_id))'
+    q = 'CREATE TABLE sim_artists (start_artist_id text, end_artist_id text, primary key(start_artist_id, end_artist_id))'# WITHOUT ROWID'
     if verbose: print q
     c.execute(q)
 
-    q = 'CREATE TABLE tracks (track_id text primary key, artist_id text, track_year integer, track_name text)'
+    q = 'CREATE TABLE tracks (track_id text primary key, artist_id text, track_year integer, track_name text)'# WITHOUT ROWID'
     if verbose: print q
     c.execute(q)
 
-    q = 'CREATE TABLE terms (artist_id text, term text, term_freq real, term_weight real, primary key(artist_id, term))'
+    q = 'CREATE TABLE terms (artist_id text, term text, term_freq real, term_weight real, primary key(artist_id, term))'# WITHOUT ROWID'
     if verbose: print q
     c.execute(q)
+
     # commit and close
     conn.commit()
     c.close()
@@ -44,22 +46,9 @@ def create_database(filename):
 
 def update_terms(artist_id, term_list, freq_list, weight_list, conn):
     c = conn.cursor()
-    q = 'SELECT term FROM terms WHERE artist_id = ' + encode_string(artist_id)
-    if verbose: print q
-    res = c.execute(q)
-    existing_terms = res.fetchall()
-    existing_terms = set([existing_term[0] for existing_term in existing_terms])
-
-    terms_to_add = set()
-    for i in xrange(len(term_list)):
-        if term_list[i] not in existing_terms:
-            terms_to_add.add(i)
-
-    if not terms_to_add:
-        return
 
     q = 'INSERT INTO terms VALUES (?, ?, ?, ?)'
-    for idx in terms_to_add:
+    for idx in xrange(len(term_list)):
         if verbose: print q, artist_id, term_list[idx], freq_list[idx], weight_list[idx]
         c.execute(q, (artist_id, term_list[idx], freq_list[idx], weight_list[idx]))
     c.close()
@@ -73,22 +62,9 @@ def save_artist(artist_id, artist_name, conn):
 
 def update_sim_artists(artist_id, sim_artist_list, conn):
     c = conn.cursor()
-    q = 'SELECT end_artist_id FROM sim_artists WHERE start_artist_id = ' + encode_string(artist_id)
-    if verbose: print q
-    res = c.execute(q)
-    existing_sim_artists = res.fetchall()
-    existing_sim_artists = set([artist[0] for artist in existing_sim_artists])
-
-    artists_to_add = set()
-    for sim_artist in sim_artist_list:
-        if sim_artist not in existing_sim_artists:
-            artists_to_add.add(sim_artist)
-
-    if not artists_to_add:
-        return
 
     q = 'INSERT INTO sim_artists VALUES (?, ?)'
-    for artist in artists_to_add:
+    for artist in sim_artist_list:
         if verbose: print q, artist_id, artist
         c.execute(q, (artist_id, artist))
     c.close()
@@ -109,41 +85,59 @@ def process_file(trackfile, conn, artists):
     # assert GETTERS.get_num_songs(h5) == 1,'code must be modified if more than one song per .h5 file'
 
     artist_id = GETTERS.get_artist_id(h5)
-    artist_name = GETTERS.get_artist_name(h5)
     if artist_id not in artists:
+        artist_name = GETTERS.get_artist_name(h5)
         save_artist(artist_id, artist_name, conn)
-        artists.add(artist_id)
 
-    sim_artist_list = GETTERS.get_similar_artists(h5)
-    update_sim_artists(artist_id, sim_artist_list, conn)
+        sim_artist_list = GETTERS.get_similar_artists(h5)
+        update_sim_artists(artist_id, sim_artist_list, conn)
+        
+	term_list = GETTERS.get_artist_terms(h5)
+        freq_list = GETTERS.get_artist_terms_freq(h5)
+        weight_list = GETTERS.get_artist_terms_weight(h5)
+        update_terms(artist_id, term_list, freq_list, weight_list, conn)
+
+	artists.add(artist_id)
 
     track_id = GETTERS.get_track_id(h5)
     track_year = GETTERS.get_year(h5)
     track_name = GETTERS.get_title(h5)
     save_track(track_id, artist_id, track_year, track_name, conn)
 
-    term_list = GETTERS.get_artist_terms(h5)
-    freq_list = GETTERS.get_artist_terms_freq(h5)
-    weight_list = GETTERS.get_artist_terms_weight(h5)
-    update_terms(artist_id, term_list, freq_list, weight_list, conn)
-
     h5.close()
 
-def process_all(maindir, conn):
+def process_all(maindir, dbfile, outFile):
     artists = set()
     numfiles = 0
+
+    currLetter = 'bad'
+    conn = None
+
     # iterate over all files in all subdirectories
     for root, dirs, files in os.walk(maindir):
         # keep the .h5 files
         files = glob.glob(os.path.join(root,'*.h5'))
         for f in files :
+	    letter = f[15]
+	    if letter != currLetter:
+                if conn != None:
+		    conn.commit()
+                    conn.close()
+                create_database(dbfile + '_' + letter + ".db")
+		conn = sqlite3.connect(dbfile + '_' + letter + '.db')
+		currLetter = letter
+		print 'working on', letter
+
             if numfiles % 500 == 0:
-                print numfiles, f
+		out = open(outFile, 'a')
+		out.write(str(numfiles) + ": " + f + "\n")
+		out.close()
                 conn.commit()
             numfiles += 1
             process_file(f, conn, artists)
 
     conn.commit()
+    conn.close()
     print 'num files:', numfiles
     print 'num artists:', len(artists)
 
@@ -154,7 +148,7 @@ def die_with_usage():
     print '   by T. Bertin-Mahieux (2010) Columbia University'
     print ''
     print 'usage:'
-    print '  python list_all_artists.py <DATASET DIR> output.txt'
+    print '  python list_all_artists.py <DATASET DIR> databaseFile outputFile'
     print ''
     print 'This code lets you list all the similar artists for a each artist contained in all'
     print 'subdirectories of a given directory.'
@@ -169,7 +163,7 @@ def die_with_usage():
 if __name__ == '__main__':
 
     # help menu
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         die_with_usage()
 
     # Million Song Dataset imports, works under Linux
@@ -185,6 +179,7 @@ if __name__ == '__main__':
     # params
     maindir = sys.argv[1]
     dbfile = sys.argv[2]
+    outFile = sys.argv[3]
 
     # sanity checks
     if not os.path.isdir(maindir):
@@ -195,14 +190,17 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # go!
+    out = open(outFile, 'a')
+    out.write('started at ' + time.ctime() + '\n')
+    out.close()
     t1 = time.time()
-    create_database(dbfile)
 
-    conn = sqlite3.connect(dbfile)
-
-    process_all(maindir, conn)
-    conn.close()
+    process_all(maindir, dbfile, outFile)
 
     t2 = time.time()
     stimelength = str(datetime.timedelta(seconds=t2-t1))
     print 'time:',stimelength
+    
+    out = open(outFile, 'a')
+    out.write('done in ' + stimelength + '\n')
+    out.close()
