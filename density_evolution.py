@@ -43,7 +43,7 @@ for i in xrange(len(nodeIds)):
                 sameNeighborCount += 1
 
         if sameNeighborCount != 0:
-            dist = 1.0 * sameNeighborCount / math.sqrt(node1.GetDeg() * graph.GetNI(nodeIds[j]).GetDeg())
+            dist = 1.0 - (1.0 * sameNeighborCount / math.sqrt(node1.GetDeg() * graph.GetNI(nodeIds[j]).GetDeg()))
             dists[i,j] = dist
             dists[j,i] = dist
 
