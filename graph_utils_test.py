@@ -25,7 +25,7 @@ nodes_and_edges = []
 modularity_list = []
 num_clusters = []
 
-for year in range(1930, 2011):
+for year in range(1935, 2011, 10):
 	print year
 	years.append(year)
 	graph = build_graph(conn, year, artist_id_to_int)

@@ -28,7 +28,7 @@ num_clusters = []
 
 CmtyV_t_minus_1 = None
 
-for year in range(1930, 1961):
+for year in range(1930, 2011):
     print year
     years.append(year)
 
@@ -54,12 +54,12 @@ for year in range(1930, 1961):
 
     num_clusters.append(CmtyV.Len())
 
-np.savetxt('years.txt', years, delimiter=',')
-np.savetxt('nodes_and_edges.txt', nodes_and_edges, delimiter=',')
-np.savetxt('snap_modularity_list.txt', snap_modularity_list, delimiter=',')
-np.savetxt('my_modularity_list.txt', my_modularity_list, delimiter=',')
-np.savetxt('term_metric_list.txt', term_metric_list, delimiter=',')
-np.savetxt('temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
-np.savetxt('num_clusters.txt', num_clusters, delimiter=',')
+    np.savetxt('years.txt', years, delimiter=',')
+    np.savetxt('nodes_and_edges.txt', nodes_and_edges, delimiter=',')
+    np.savetxt('snap_modularity_list.txt', snap_modularity_list, delimiter=',')
+    np.savetxt('my_modularity_list.txt', my_modularity_list, delimiter=',')
+    np.savetxt('term_metric_list.txt', term_metric_list, delimiter=',')
+    np.savetxt('temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
+    np.savetxt('num_clusters.txt', num_clusters, delimiter=',')
 
 close_db_conn(conn)
