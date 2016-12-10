@@ -39,6 +39,10 @@ def get_human_term_metric(communities, nid_to_aid_map, conn):
             else:
                 diff_comm_sim += term_sim
                 num_diff_comm_pairs += pair_count
+    if num_same_comm_pairs == 0:
+        num_same_comm_pairs = 1
+    if num_diff_comm_pairs == 0:
+        num_diff_comm_pairs = 1
     return same_comm_sim / num_same_comm_pairs, diff_comm_sim / num_diff_comm_pairs
 
 # computes the modularity of a provided community partitioning
