@@ -18,6 +18,8 @@ def get_communities_term_sim(comm1, comm2, nid_to_terms_map, nid_to_aid_map, sam
             if nid2 not in nid_to_terms_map:
                 load_artist_terms(nid2, nid_to_terms_map, nid_to_aid_map, conn)
 
+            if len(nid_to_terms_map[nid1]) == 0 and len(nid_to_terms_map[nid2]) == 0: continue
+
             term_sim += 1.0 * len(nid_to_terms_map[nid1] & nid_to_terms_map[nid2]) / len(nid_to_terms_map[nid1] | nid_to_terms_map[nid2])
             pair_count += 1
     return term_sim, pair_count
@@ -67,6 +69,7 @@ def get_modularity_metric(graph, communities):
 # computes the temporal smoothness counts across two years' community partitions
 # expects the two inputs to be of type snap.TCnComV
 # returns "number of pairs in the same state in t1 and t2", "number of pairs in different states in t1 and t2"
+# value of interest is v1 / (v1 + v2)
 def get_temporal_smoothness_metric(comms_t1, comms_t2):
     # get the mapping from nid to community id in times t1 and t2
     nid_to_comm_map_t1 = {}

@@ -131,7 +131,7 @@ for i in xrange(len(artist_list)):
     artist_id_to_int[artist_list[i][0]] = i + 1 
     nid_to_aid_map[i + 1] = artist_list[i][0]
 
-start_year = 1930
+start_year = 1975
 end_year = 2010
 
 year_range = range(start_year - 1, end_year + 1)
@@ -187,11 +187,13 @@ for year in year_range:
 
         num_clusters.append(clusters.Len())
 
-        np.savetxt('output/dbscan/1930-2010/years.txt', years, delimiter=',')
-        np.savetxt('output/dbscan/1930-2010/my_modularity_list.txt', my_modularity_list, delimiter=',')
-        np.savetxt('output/dbscan/1930-2010/term_metric_list.txt', term_metric_list, delimiter=',')
-        np.savetxt('output/dbscan/1930-2010/temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
-        np.savetxt('output/dbscan/1930-2010/num_clusters.txt', num_clusters, delimiter=',')
-        np.savetxt('output/dbscan/1930-2010/percentsNotInClusters.txt', percentsNotInClusters, delimiter=',')
+        folder = 'output/dbscan/' + str(start_year) + '-' + str(end_year) + '/'
+
+        np.savetxt(folder + 'years.txt', years, delimiter=',')
+        np.savetxt(folder + 'my_modularity_list.txt', my_modularity_list, delimiter=',')
+        np.savetxt(folder + 'term_metric_list.txt', term_metric_list, delimiter=',')
+        np.savetxt(folder + 'temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
+        np.savetxt(folder + 'num_clusters.txt', num_clusters, delimiter=',')
+        np.savetxt(folder + 'percentsNotInClusters.txt', percentsNotInClusters, delimiter=',')
 
 close_db_conn(conn)
