@@ -122,16 +122,9 @@ years_and_graphs_map = {}
 
 conn = open_db_conn(db_filename)
 
-artist_list = get_artists(conn)
+artist_id_to_int, nid_to_aid_map = get_id_mapping(conn)
 
-artist_id_to_int = {}
-nid_to_aid_map = {}
-
-for i in xrange(len(artist_list)):
-    artist_id_to_int[artist_list[i][0]] = i + 1 
-    nid_to_aid_map[i + 1] = artist_list[i][0]
-
-start_year = 1975
+start_year = 2000
 end_year = 2010
 
 year_range = range(start_year - 1, end_year + 1)
@@ -177,8 +170,8 @@ for year in year_range:
         print '  computing modularity'
         my_modularity_list.append(get_modularity_metric(years_and_graphs_map[0], clusters))
 
-        print '  computing term similarity'
-        term_metric_list.append(get_human_term_metric(clusters, nid_to_aid_map, conn))
+        # print '  computing term similarity'
+        # term_metric_list.append(get_human_term_metric(clusters, nid_to_aid_map, conn))
 
         if CmtyV_t_minus_1 is not None:
             print '  computing temporal smoothness'
@@ -191,7 +184,7 @@ for year in year_range:
 
         np.savetxt(folder + 'years.txt', years, delimiter=',')
         np.savetxt(folder + 'my_modularity_list.txt', my_modularity_list, delimiter=',')
-        np.savetxt(folder + 'term_metric_list.txt', term_metric_list, delimiter=',')
+        # np.savetxt(folder + 'term_metric_list.txt', term_metric_list, delimiter=',')
         np.savetxt(folder + 'temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
         np.savetxt(folder + 'num_clusters.txt', num_clusters, delimiter=',')
         np.savetxt(folder + 'percentsNotInClusters.txt', percentsNotInClusters, delimiter=',')
