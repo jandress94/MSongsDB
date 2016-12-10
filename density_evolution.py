@@ -7,8 +7,6 @@ import math
 import snap
 from sklearn.cluster import DBSCAN
 
-results = {}
-
 def build_orig_mat(years_and_graphs_map, all_vertex_ids, nid_to_index_map):
     allEdges = set()
 
@@ -68,33 +66,27 @@ def compute_clusters(years_and_weights_map, years_and_graphs_map, year_true):
     for year in years_and_graphs_map:
         weighted_dist_mat -= get_sim_mat(years_and_graphs_map[year], all_vertex_ids, nid_to_index_map, years_and_weights_map[year], allEdges)
 
-    # print 'Computing clusters'
-    for min_samples in range(1, 11):
-        for eps in range(65, 96):
-            if (min_samples, eps) not in results:
-                results[(min_samples, eps)] = []
-            db = DBSCAN(metric='precomputed', eps = eps / 100.0, min_samples = min_samples).fit(weighted_dist_mat)
+    print 'Computing clusters'
+    db = DBSCAN(metric='precomputed', eps = 0.84, min_samples = 2).fit(weighted_dist_mat)
 
-            labels = db.labels_
-            clusters_map = {}
+    labels = db.labels_
+    clusters_map = {}
 
-            notInCluster = 0
-            for node in years_and_graphs_map[0].Nodes():
-                label = labels[nid_to_index_map[node.GetId()]]
-                if label == -1:
-                    notInCluster += 1
-                else:
-                    if label not in clusters_map:
-                        clusters_map[label] = snap.TIntV()
-                    clusters_map[label].Add(node.GetId())
+    notInCluster = 0
+    for node in years_and_graphs_map[0].Nodes():
+        label = labels[nid_to_index_map[node.GetId()]]
+        if label == -1:
+            notInCluster += 1
+        else:
+            if label not in clusters_map:
+                clusters_map[label] = snap.TIntV()
+            clusters_map[label].Add(node.GetId())
 
-            clusters = snap.TCnComV()
-            for cluster in clusters_map.values():
-                clusters.Add(snap.TCnCom(cluster))
+    clusters = snap.TCnComV()
+    for cluster in clusters_map.values():
+        clusters.Add(snap.TCnCom(cluster))
 
-            # print 'got', len(clusters_map), 'clusters'
-            # print notInCluster, 'out of', years_and_graphs_map[0].GetNodes(), 'nodes were not in a cluster'
-            results[(min_samples, eps)].append((len(clusters_map), 1.0 * notInCluster / years_and_graphs_map[0].GetNodes()))
+    print notInCluster, 'out of', years_and_graphs_map[0].GetNodes(), 'nodes were not in a cluster'
     return clusters
 
 
@@ -126,6 +118,17 @@ end_year = 2010
 
 year_range = range(start_year - 1, end_year + 1)
 
+
+
+years = []
+snap_modularity_list = []
+my_modularity_list = []
+term_metric_list = []
+temp_smoothness_list = []
+num_clusters = []
+
+CmtyV_t_minus_1 = None
+
 for year in year_range:
     print 'Building graph for', year
     graph = build_graph(conn, year, artist_id_to_int)
@@ -151,33 +154,37 @@ for year in year_range:
     if len(years_and_graphs_map) == len(years_and_weights_map):
         print 'Computing clusters for', (year - max(years_and_weights_map.keys()))
         clusters = compute_clusters(years_and_weights_map, years_and_graphs_map, year)
-        # print 'human terms metric', get_human_term_metric(clusters, nid_to_aid_map, conn)
 
-param_keys = [elem for elem in results.keys()]
+        years.append(year)
 
-print 'num clusters'
+        print '  building graph'
+        graph = build_graph(conn, year, artist_id_to_int)
+        nodes_and_edges.append((graph.GetNodes(), graph.GetEdges()))
+        CmtyV = snap.TCnComV()
 
-print ',', [str(param[0]) + ' ' + str(param[1]) for param in param_keys]
+        print '  computing communities'
+        snap_modularity = snap.CommunityCNM(graph, CmtyV)
+        snap_modularity_list.append(snap_modularity)
 
-for year in year_range:
-    if year < start_year: continue
+        print '  computing modularity'
+        my_modularity_list.append(get_modularity_metric(graph, CmtyV))
 
-    result_string = str(year)
-    for param in param_keys:
-        result_string += ',' + str(results[param][year - start_year][0])
-    print result_string
+        print '  computing term similarity'
+        term_metric_list.append(get_human_term_metric(CmtyV, nid_to_aid_map, conn, sample_size = 100))
 
-print 'unclassified proportion'
+        if CmtyV_t_minus_1 is not None:
+            print '  computing temporal smoothness'
+            temp_smoothness_list.append(get_temporal_smoothness_metric(CmtyV_t_minus_1, CmtyV))
+        CmtyV_t_minus_1 = CmtyV
 
-print ',', [str(param[0]) + ' ' + str(param[1]) for param in param_keys]
+        num_clusters.append(CmtyV.Len())
 
-for year in year_range:
-    if year < start_year: continue
-
-    result_string = str(year)
-    for param in param_keys:
-        result_string += ',' + str(results[param][year - start_year][1])
-    print result_string
-
+        np.savetxt('years.txt', years, delimiter=',')
+        np.savetxt('nodes_and_edges.txt', nodes_and_edges, delimiter=',')
+        np.savetxt('snap_modularity_list.txt', snap_modularity_list, delimiter=',')
+        np.savetxt('my_modularity_list.txt', my_modularity_list, delimiter=',')
+        np.savetxt('term_metric_list.txt', term_metric_list, delimiter=',')
+        np.savetxt('temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
+        np.savetxt('num_clusters.txt', num_clusters, delimiter=',')
 
 close_db_conn(conn)
