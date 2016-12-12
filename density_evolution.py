@@ -56,25 +56,42 @@ def get_sim_mat(graph, all_vertex_ids, nid_to_index_map, weight, allEdges):
     return sparse.coo_matrix((data, (i, j)), shape = (len(all_vertex_ids), len(all_vertex_ids))).tocsr()
 
 def add_unlabeled_nodes(nodes_not_in_clusters, years_and_graphs_map, clusters_map, labels, nid_to_index_map):
+    print 'partitioning unclustered nodes'
     neighbor_cluster_counter = {}
     for node_id in nodes_not_in_clusters:
-        neighbor_cluster_counter[node_id] = {cluster_id : 0 for cluster_id in clusters_map.keys()}
+        neighbor_cluster_counter[node_id] = {}
         for neighbor_id in years_and_graphs_map[0].GetNI(node_id).GetOutEdges():
             if neighbor_id not in nodes_not_in_clusters:
-                neighbor_cluster_counter[node_id][labels[nid_to_index_map[neighbor_id]]] += 1
+                label = labels[nid_to_index_map[neighbor_id]]
+                if label not in neighbor_cluster_counter[node_id]:
+                    neighbor_cluster_counter[node_id][label] = 0
+                neighbor_cluster_counter[node_id][label] += 1
 
+    node_to_best_label = {node_id : max(neighbor_cluster_counter[node_id], key=neighbor_cluster_counter[node_id].get) \
+                            for node_id in neighbor_cluster_counter if neighbor_cluster_counter[node_id]}
     while neighbor_cluster_counter:
         # get max
-        node_to_best_label = {node_id : max(neighbor_cluster_counter[node_id], key=neighbor_cluster_counter[node_id].get) for node_id in neighbor_cluster_counter}
-        node_to_add = max(node_to_best_label, key=lambda node_id : neighbor_cluster_counter[node_id][node_to_best_label[node_id]])
-        label_for_node = node_to_best_label[node_to_add]
+        if node_to_best_label:
+            node_to_add = max(node_to_best_label, key=lambda node_id : neighbor_cluster_counter[node_id][node_to_best_label[node_id]])
+            label_for_node = node_to_best_label[node_to_add]
+        else:
+            node_to_add = random.choice(neighbor_cluster_counter.keys())
+            label_for_node = random.choice([label for label in labels if label != -1])
+
         clusters_map[label_for_node].Add(node_to_add)
 
         del neighbor_cluster_counter[node_to_add]
+        if node_to_add in node_to_best_label:
+            del node_to_best_label[node_to_add]
 
         for neighbor_id in years_and_graphs_map[0].GetNI(node_to_add).GetOutEdges():
             if neighbor_id in neighbor_cluster_counter:
+                if label_for_node not in neighbor_cluster_counter[neighbor_id]:
+                    neighbor_cluster_counter[neighbor_id][label_for_node] = 0
                 neighbor_cluster_counter[neighbor_id][label_for_node] += 1
+                if neighbor_id not in node_to_best_label or \
+                        neighbor_cluster_counter[neighbor_id][label_for_node] > neighbor_cluster_counter[neighbor_id][node_to_best_label[neighbor_id]]:
+                    node_to_best_label[neighbor_id] = label_for_node
 
 
     # # label all of the nodes not in a cluster, but keep them in their own set
@@ -160,7 +177,7 @@ conn = open_db_conn(db_filename)
 
 artist_id_to_int, nid_to_aid_map = get_id_mapping(conn)
 
-start_year = 1980
+start_year = 2008
 end_year = 2010
 
 year_range = range(start_year - 1, end_year + 1)
