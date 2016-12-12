@@ -1,6 +1,7 @@
 import snap
 from db_utils import get_artist_terms
 import random
+import numpy
 
 def load_artist_terms(nid, nid_to_terms_map, nid_to_aid_map, conn):
     artist_term_tuples = get_artist_terms(nid_to_aid_map[nid], conn)
@@ -95,4 +96,13 @@ def get_temporal_smoothness_metric(comms_t1, comms_t2):
                 diff_state_pairs += 1
     return same_state_pairs, diff_state_pairs
 
+def get_community_stats(communities, num_nodes):
+    if communities.Len() == 0:
+        return 0, 0
+    comm_fracs = [1.0 * comm.Len() / num_nodes for comm in communities]
 
+    max_frac = max(comm_fracs)
+    min_frac = min(comm_fracs)
+    # median_frac = numpy.median(numpy.array(comm_fracs))
+    # mean_frac = numpy.mean(numpy.array(comm_fracs))
+    return min_frac, max_frac#, mean_frac, median_frac

@@ -34,9 +34,11 @@ def get_id_mapping(conn):
 def build_graph(conn, year, artist_id_to_int):
 	filename = 'input/' + str(year) + '_edges.txt'
 	if os.path.isfile(filename):
+		print 'loading graph from file'
 		graph = snap.LoadEdgeList(snap.PUNGraph, filename, 0, 1, '\t')
 		return graph
 
+	print 'caution, regenerating graph'
 	graph = snap.PUNGraph.New()
 	active_artists = set(get_artist_ids_active_during_year(year, 5, conn)) # set is probably faster
 	# Add nodes

@@ -8,6 +8,8 @@ import snap
 from sklearn.cluster import DBSCAN
 import numpy as np
 
+param_results = {}
+
 def build_orig_mat(years_and_graphs_map, all_vertex_ids, nid_to_index_map):
     allEdges = set()
 
@@ -53,6 +55,43 @@ def get_sim_mat(graph, all_vertex_ids, nid_to_index_map, weight, allEdges):
             edge_sims[edgePair] = sim
     return sparse.coo_matrix((data, (i, j)), shape = (len(all_vertex_ids), len(all_vertex_ids))).tocsr()
 
+def add_unlabeled_nodes(nodes_not_in_clusters, years_and_graphs_map, clusters_map, labels, nid_to_index_map):
+    neighbor_cluster_counter = {}
+    for node_id in nodes_not_in_clusters:
+        neighbor_cluster_counter[node_id] = {cluster_id : 0 for cluster_id in clusters_map.keys()}
+        for neighbor_id in years_and_graphs_map[0].GetNI(node_id).GetOutEdges():
+            if neighbor_id not in nodes_not_in_clusters:
+                neighbor_cluster_counter[node_id][labels[nid_to_index_map[neighbor_id]]] += 1
+
+    while neighbor_cluster_counter:
+        # get max
+        node_to_best_label = {node_id : max(neighbor_cluster_counter[node_id], key=neighbor_cluster_counter[node_id].get) for node_id in neighbor_cluster_counter}
+        node_to_add = max(node_to_best_label, key=lambda node_id : neighbor_cluster_counter[node_id][node_to_best_label[node_id]])
+        label_for_node = node_to_best_label[node_to_add]
+        clusters_map[label_for_node].Add(node_to_add)
+
+        del neighbor_cluster_counter[node_to_add]
+
+        for neighbor_id in years_and_graphs_map[0].GetNI(node_to_add).GetOutEdges():
+            if neighbor_id in neighbor_cluster_counter:
+                neighbor_cluster_counter[neighbor_id][label_for_node] += 1
+
+
+    # # label all of the nodes not in a cluster, but keep them in their own set
+    # new_labels = {}
+    # for node_id in nodes_not_in_clusters:
+    #     node = years_and_graphs_map[0].GetNI(node_id)
+    #     neighbor_cluster_counter = {cluster_id : 0 for cluster_id in clusters_map.keys()}
+    #     for neighbor_id in node.GetOutEdges():
+    #         if labels[nid_to_index_map[neighbor_id]] != -1:
+    #             neighbor_cluster_counter[labels[nid_to_index_map[neighbor_id]]] += 1
+    #     max_count = max(neighbor_cluster_counter.values())
+    #     new_labels[node_id] = random.choice([cluster_id for cluster_id in neighbor_cluster_counter.keys() if neighbor_cluster_counter[cluster_id] == max_count])
+
+    # # put the newly assigned nodes into the real clusters
+    # for node_id in new_labels:
+    #     clusters_map[new_labels[node_id]].Add(node_id)
+
 def compute_clusters(years_and_weights_map, years_and_graphs_map, year_true):
     # get the set of all vertices across these years
     all_vertices = set()
@@ -68,7 +107,10 @@ def compute_clusters(years_and_weights_map, years_and_graphs_map, year_true):
         weighted_dist_mat -= get_sim_mat(years_and_graphs_map[year], all_vertex_ids, nid_to_index_map, years_and_weights_map[year], allEdges)
 
     print 'Computing clusters'
-    db = DBSCAN(metric='precomputed', eps = 0.84, min_samples = 2).fit(weighted_dist_mat)
+    # for min_samples in range(1, 15):
+    #     for eps in range(5, 100, 5):
+
+    db = DBSCAN(metric='precomputed', eps = 0.5, min_samples = 4).fit(weighted_dist_mat)
 
     labels = db.labels_
     clusters_map = {}
@@ -85,25 +127,19 @@ def compute_clusters(years_and_weights_map, years_and_graphs_map, year_true):
                 clusters_map[label] = snap.TIntV()
             clusters_map[label].Add(node.GetId())
 
-    # label all of the nodes not in a cluster, but keep them in their own set
-    new_labels = {}
-    for node_id in nodes_not_in_clusters:
-        node = years_and_graphs_map[0].GetNI(node_id)
-        neighbor_cluster_counter = {cluster_id : 0 for cluster_id in clusters_map.keys()}
-        for neighbor_id in node.GetOutEdges():
-            if labels[nid_to_index_map[neighbor_id]] != -1:
-                neighbor_cluster_counter[labels[nid_to_index_map[neighbor_id]]] += 1
-        max_count = max(neighbor_cluster_counter.values())
-        new_labels[node_id] = random.choice([cluster_id for cluster_id in neighbor_cluster_counter.keys() if neighbor_cluster_counter[cluster_id] == max_count])
-
-    # put the newly assigned nodes into the real clusters
-    for node_id in new_labels:
-        clusters_map[new_labels[node_id]].Add(node_id)
+    add_unlabeled_nodes(nodes_not_in_clusters, years_and_graphs_map, clusters_map, labels, nid_to_index_map)
 
     # Convert to expected format
     clusters = snap.TCnComV()
     for cluster in clusters_map.values():
         clusters.Add(snap.TCnCom(cluster))
+
+    # param_tup = (min_samples, eps / 100.0)
+    # if param_tup not in param_results:
+    #     param_results[param_tup] = []
+    # param_results[param_tup].append((get_community_stats(clusters, years_and_graphs_map[0].GetNodes() - notInCluster)[1], 
+    #                                 1.0 * notInCluster / years_and_graphs_map[0].GetNodes(),
+    #                                 len(clusters_map)))
 
     return clusters, 1.0 * notInCluster / years_and_graphs_map[0].GetNodes()
 
@@ -124,7 +160,7 @@ conn = open_db_conn(db_filename)
 
 artist_id_to_int, nid_to_aid_map = get_id_mapping(conn)
 
-start_year = 2000
+start_year = 1980
 end_year = 2010
 
 year_range = range(start_year - 1, end_year + 1)
@@ -170,8 +206,8 @@ for year in year_range:
         print '  computing modularity'
         my_modularity_list.append(get_modularity_metric(years_and_graphs_map[0], clusters))
 
-        # print '  computing term similarity'
-        # term_metric_list.append(get_human_term_metric(clusters, nid_to_aid_map, conn))
+        print '  computing term similarity'
+        term_metric_list.append(get_human_term_metric(clusters, nid_to_aid_map, conn))
 
         if CmtyV_t_minus_1 is not None:
             print '  computing temporal smoothness'
@@ -184,9 +220,30 @@ for year in year_range:
 
         np.savetxt(folder + 'years.txt', years, delimiter=',')
         np.savetxt(folder + 'my_modularity_list.txt', my_modularity_list, delimiter=',')
-        # np.savetxt(folder + 'term_metric_list.txt', term_metric_list, delimiter=',')
+        np.savetxt(folder + 'term_metric_list.txt', term_metric_list, delimiter=',')
         np.savetxt(folder + 'temp_smoothness_list.txt', temp_smoothness_list, delimiter=',')
         np.savetxt(folder + 'num_clusters.txt', num_clusters, delimiter=',')
         np.savetxt(folder + 'percentsNotInClusters.txt', percentsNotInClusters, delimiter=',')
 
 close_db_conn(conn)
+
+# print 'max cluster sizes'
+# for param_tup in param_results:
+#     result_str = '(' + str(param_tup[0]) + ' ' + str(param_tup[1]) + ')'
+#     for elem in param_results[param_tup]:
+#         result_str += ',' + str(elem[0])
+#     print result_str
+
+# print 'percent not classified'
+# for param_tup in param_results:
+#     result_str = '(' + str(param_tup[0]) + ' ' + str(param_tup[1]) + ')'
+#     for elem in param_results[param_tup]:
+#         result_str += ',' + str(elem[1])
+#     print result_str
+
+# print 'num clusters'
+# for param_tup in param_results:
+#     result_str = '(' + str(param_tup[0]) + ' ' + str(param_tup[1]) + ')'
+#     for elem in param_results[param_tup]:
+#         result_str += ',' + str(elem[2])
+#     print result_str
