@@ -16,7 +16,7 @@ artist_id_to_int, nid_to_aid_map = get_id_mapping(conn)
 
 start_year = 1950
 end_year = 2010
-alpha = 0.5
+alpha = 0.8
 num_iter = 20
 
 year_range = range(start_year - 1, end_year + 1)
