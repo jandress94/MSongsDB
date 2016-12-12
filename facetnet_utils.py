@@ -77,11 +77,12 @@ def add_and_remove_nodes(Z_prev, all_vertex_ids_prev, nid_to_index_map_prev, all
 	n = len(all_vertex_ids)
 	Z_prev_adjusted = np.zeros((n, n))
 	for i in xrange(n):
-		for j in xrange(n):
-			node_i = all_vertex_ids[i]
-			node_j = all_vertex_ids[j]
-			if (node_i in all_vertex_ids_prev) and (node_j in all_vertex_ids_prev):
-				Z_prev_adjusted[i, j] = Z_prev[nid_to_index_map_prev[node_i], nid_to_index_map_prev[node_j]]
+		node_i = all_vertex_ids[i]
+		if (node_i in nid_to_index_map_prev):
+			for j in xrange(n):
+				node_j = all_vertex_ids[j]
+				if (node_j in nid_to_index_map_prev):
+					Z_prev_adjusted[i, j] = Z_prev[nid_to_index_map_prev[node_i], nid_to_index_map_prev[node_j]]
 	Z_prev_adjusted = 1.0/np.sum(np.sum(Z_prev_adjusted)) * Z_prev_adjusted
 	return Z_prev_adjusted
 
