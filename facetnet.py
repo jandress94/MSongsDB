@@ -14,9 +14,9 @@ artist_list = get_artists(conn)
 
 artist_id_to_int, nid_to_aid_map = get_id_mapping(conn)
 
-start_year = 1950
-end_year = 2010
-alpha = 0.8
+start_year = 1930
+end_year = 1950
+alpha = 0.2
 num_iter = 20
 
 year_range = range(start_year - 1, end_year + 1)
@@ -29,7 +29,7 @@ num_clusters_list = []
 
 clusters_prev = None
 window_half_size = 2
-min_num_clusters = 5
+min_num_clusters = 3
 max_num_clusters = 15
 num_clusters_prev = min_num_clusters + window_half_size
 #cluster_size_range = range(min_num_clusters, max_num_clusters+1)
